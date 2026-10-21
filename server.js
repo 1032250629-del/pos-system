@@ -10,7 +10,7 @@ const path = require('path');
 const { db, SEED_DATA } = require('./db');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
 // Global Active User session state in memory
 let activeUser = {
@@ -58,7 +58,6 @@ app.get('/api/health', (req, res) => {
 // -------------------------------------------------------------
 // 2. AUTHENTICATION & USERS API
 // -------------------------------------------------------------
-// List available operators / cashiers
 app.get('/api/auth/users', async (req, res) => {
   try {
     const users = await db.all("SELECT id, name, role, avatar FROM users;");
@@ -68,7 +67,6 @@ app.get('/api/auth/users', async (req, res) => {
   }
 });
 
-// Authenticate / Login with User ID and PIN
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { userId, pin } = req.body;
@@ -102,12 +100,10 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Get current active user
 app.get('/api/auth/current', (req, res) => {
   res.json({ success: true, user: activeUser });
 });
 
-// Switch active user
 app.post('/api/auth/switch', async (req, res) => {
   try {
     const { userId } = req.body;
@@ -123,7 +119,6 @@ app.post('/api/auth/switch', async (req, res) => {
   }
 });
 
-// Logout
 app.post('/api/auth/logout', (req, res) => {
   activeUser = { id: "usr-2", name: "Sarah Connor", role: "cashier", avatar: "SC" };
   res.json({ success: true, message: "Session ended. Switched to default cashier.", user: activeUser });
@@ -132,18 +127,15 @@ app.post('/api/auth/logout', (req, res) => {
 // -------------------------------------------------------------
 // 3. INVENTORY & CATEGORIES API
 // -------------------------------------------------------------
-// List products with optional search, category and stock filters
 app.get('/api/products', async (req, res) => {
   try {
     const { category, search, stockFilter } = req.query;
     let products = await db.all("SELECT * FROM products ORDER BY name ASC;");
 
-    // Category filter
     if (category && category !== 'all') {
       products = products.filter(p => p.category === category);
     }
 
-    // Search query filter
     if (search) {
       const q = search.toLowerCase().trim();
       products = products.filter(p =>
@@ -153,7 +145,6 @@ app.get('/api/products', async (req, res) => {
       );
     }
 
-    // Stock level filter
     if (stockFilter === 'low') {
       const settings = await db.get("SELECT lowStockThreshold FROM settings WHERE id = 1;");
       const threshold = settings ? settings.lowStockThreshold : 10;
@@ -168,7 +159,6 @@ app.get('/api/products', async (req, res) => {
   }
 });
 
-// Barcode / SKU quick lookup (for barcode scanners and search box)
 app.get('/api/products/lookup/:code', async (req, res) => {
   try {
     const code = req.params.code.trim();
@@ -186,7 +176,6 @@ app.get('/api/products/lookup/:code', async (req, res) => {
   }
 });
 
-// Get product by ID
 app.get('/api/products/:id', async (req, res) => {
   try {
     const product = await db.get("SELECT * FROM products WHERE id = ?;", [req.params.id]);
@@ -199,7 +188,6 @@ app.get('/api/products/:id', async (req, res) => {
   }
 });
 
-// Add new product
 app.post('/api/products', async (req, res) => {
   try {
     const { name, sku, barcode, category, price, costPrice, taxRate, stock, icon, description } = req.body;
@@ -236,7 +224,6 @@ app.post('/api/products', async (req, res) => {
   }
 });
 
-// Update existing product
 app.put('/api/products/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -273,7 +260,6 @@ app.put('/api/products/:id', async (req, res) => {
   }
 });
 
-// Stock replenishment & delta adjustment (+1 / -1 / specific adjustment)
 app.patch('/api/products/:id/stock', async (req, res) => {
   try {
     const { id } = req.params;
@@ -300,7 +286,6 @@ app.patch('/api/products/:id/stock', async (req, res) => {
   }
 });
 
-// Delete product
 app.delete('/api/products/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -316,7 +301,6 @@ app.delete('/api/products/:id', async (req, res) => {
   }
 });
 
-// Categories List
 app.get('/api/categories', async (req, res) => {
   try {
     const categories = await db.all("SELECT * FROM categories;");
@@ -326,7 +310,6 @@ app.get('/api/categories', async (req, res) => {
   }
 });
 
-// Add / Update Category
 app.post('/api/categories', async (req, res) => {
   try {
     const { id, name, icon } = req.body;
@@ -345,7 +328,6 @@ app.post('/api/categories', async (req, res) => {
 // -------------------------------------------------------------
 // 4. CUSTOMERS & CRM API
 // -------------------------------------------------------------
-// Get customer list with optional search
 app.get('/api/customers', async (req, res) => {
   try {
     const { search } = req.query;
@@ -366,7 +348,6 @@ app.get('/api/customers', async (req, res) => {
   }
 });
 
-// Get customer by ID
 app.get('/api/customers/:id', async (req, res) => {
   try {
     const customer = await db.get("SELECT * FROM customers WHERE id = ?;", [req.params.id]);
@@ -379,7 +360,6 @@ app.get('/api/customers/:id', async (req, res) => {
   }
 });
 
-// Create new customer
 app.post('/api/customers', async (req, res) => {
   try {
     const { name, phone, email, points, totalSpent } = req.body;
@@ -408,7 +388,6 @@ app.post('/api/customers', async (req, res) => {
   }
 });
 
-// Update customer details
 app.put('/api/customers/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -436,7 +415,6 @@ app.put('/api/customers/:id', async (req, res) => {
   }
 });
 
-// Update customer points / loyalty balance
 app.patch('/api/customers/:id/points', async (req, res) => {
   try {
     const { id } = req.params;
@@ -472,7 +450,6 @@ app.patch('/api/customers/:id/points', async (req, res) => {
 // -------------------------------------------------------------
 // 5. TRANSACTIONS, BILLING & POS CHECKOUT API
 // -------------------------------------------------------------
-// Process Sale / Checkout (Atomic inventory deduction + Loyalty rewards + Invoice creation)
 app.post('/api/orders', async (req, res) => {
   try {
     const { cashier, customer, items, subtotal, tax, discount, grandTotal, paymentMethod, tenderedAmount, changeDue } = req.body;
@@ -481,7 +458,6 @@ app.post('/api/orders', async (req, res) => {
       return res.status(400).json({ success: false, message: "Cannot checkout an empty cart." });
     }
 
-    // 1. Validate and decrement inventory stock
     for (const item of items) {
       const prod = await db.get("SELECT stock, name FROM products WHERE id = ?;", [item.id]);
       if (prod && prod.stock < item.qty) {
@@ -492,12 +468,10 @@ app.post('/api/orders', async (req, res) => {
       }
     }
 
-    // Deduct stock
     for (const item of items) {
       await db.run("UPDATE products SET stock = MAX(0, stock - ?) WHERE id = ?;", [item.qty, item.id]);
     }
 
-    // 2. Compute Invoice Number & Order ID
     const countRow = await db.get("SELECT COUNT(*) as count FROM orders;");
     const count = (countRow ? countRow.count : 0) + 1;
     const year = new Date().getFullYear();
@@ -505,7 +479,6 @@ app.post('/api/orders', async (req, res) => {
     const invoiceNumber = req.body.invoiceNumber || `INV-${year}-${String(count).padStart(4, "0")}`;
     const timestamp = new Date().toISOString();
 
-    // 3. Update customer loyalty points (1 point per 10 currency spent)
     if (customer && customer.id && customer.id !== "cust-0") {
       const pointsEarned = Math.floor(grandTotal / 10);
       await db.run(
@@ -514,7 +487,6 @@ app.post('/api/orders', async (req, res) => {
       );
     }
 
-    // 4. Save Order Record
     await db.run(
       `INSERT INTO orders (id, invoiceNumber, timestamp, cashier, customer, items, subtotal, tax, discount, grandTotal, paymentMethod, tenderedAmount, changeDue, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
@@ -536,7 +508,6 @@ app.post('/api/orders', async (req, res) => {
       ]
     );
 
-    // Retrieve Settings for Receipt Details
     const settings = await db.get("SELECT * FROM settings WHERE id = 1;");
 
     const completedOrder = {
@@ -570,7 +541,6 @@ app.post('/api/orders', async (req, res) => {
   }
 });
 
-// List sales orders & transactions with filters
 app.get('/api/orders', async (req, res) => {
   try {
     const { status, paymentMethod, search } = req.query;
@@ -581,11 +551,7 @@ app.get('/api/orders', async (req, res) => {
       let items = o.items;
       try { customer = JSON.parse(o.customer); } catch (e) {}
       try { items = JSON.parse(o.items); } catch (e) {}
-      return {
-        ...o,
-        customer,
-        items
-      };
+      return { ...o, customer, items };
     });
 
     if (status && status !== 'all') {
@@ -612,7 +578,6 @@ app.get('/api/orders', async (req, res) => {
   }
 });
 
-// Get single order by ID
 app.get('/api/orders/:id', async (req, res) => {
   try {
     const order = await db.get("SELECT * FROM orders WHERE id = ?;", [req.params.id]);
@@ -629,7 +594,6 @@ app.get('/api/orders/:id', async (req, res) => {
   }
 });
 
-// Refund an order & restock inventory
 app.post('/api/orders/:id/refund', async (req, res) => {
   try {
     const { id } = req.params;
@@ -647,7 +611,6 @@ app.post('/api/orders/:id/refund', async (req, res) => {
     let items = [];
     try { items = JSON.parse(order.items); } catch (e) {}
 
-    // Restock items in inventory
     for (const item of items) {
       await db.run("UPDATE products SET stock = stock + ? WHERE id = ?;", [item.qty, item.id]);
     }
@@ -750,7 +713,6 @@ app.get('/api/dashboard/stats', async (req, res) => {
       return o;
     });
 
-    // Today's Date calculation
     const todayStr = new Date().toISOString().split("T")[0];
     const todayOrders = orders.filter(o => o.timestamp.startsWith(todayStr));
     const todayRevenue = todayOrders.reduce((sum, o) => sum + o.grandTotal, 0);
@@ -758,168 +720,6 @@ app.get('/api/dashboard/stats', async (req, res) => {
     const avgOrderValue = todayOrders.length > 0 ? (todayRevenue / todayOrders.length) : 0;
     const lowStockCount = products.filter(p => p.stock <= (settings.lowStockThreshold || 10)).length;
 
-    // Weekly sales buckets [Mon..Sun]
     const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     const weeklySales = [120, 190, 240, 310, 420, 580, 490];
-    const todayDayIdx = (new Date().getDay() + 6) % 7;
-    const totalRevenue = orders.reduce((sum, o) => sum + o.grandTotal, 0);
-    weeklySales[todayDayIdx] = Math.max(weeklySales[todayDayIdx], totalRevenue);
-
-    // Category Sales breakdown
-    const categoryTotals = {};
-    const prodMap = {};
-    products.forEach(p => { prodMap[p.id] = p; });
-
-    orders.forEach(o => {
-      if (o.items && Array.isArray(o.items)) {
-        o.items.forEach(it => {
-          const prod = prodMap[it.id];
-          const cat = prod ? prod.category : 'other';
-          categoryTotals[cat] = (categoryTotals[cat] || 0) + (it.total || (it.price * it.qty));
-        });
-      }
-    });
-
-    // Top Selling Products
-    const itemMap = {};
-    orders.forEach(o => {
-      if (o.items && Array.isArray(o.items)) {
-        o.items.forEach(it => {
-          if (!itemMap[it.id]) {
-            itemMap[it.id] = { id: it.id, name: it.name, count: 0, revenue: 0 };
-          }
-          itemMap[it.id].count += it.qty;
-          itemMap[it.id].revenue += it.total || (it.price * it.qty);
-        });
-      }
-    });
-    const topProducts = Object.values(itemMap).sort((a, b) => b.count - a.count).slice(0, 5);
-
-    // Recent 5 Transactions
-    const recentOrders = await db.all("SELECT * FROM orders ORDER BY timestamp DESC LIMIT 5;");
-    const recentTransactions = recentOrders.map(o => {
-      try { o.customer = JSON.parse(o.customer); } catch (e) {}
-      try { o.items = JSON.parse(o.items); } catch (e) {}
-      return o;
-    });
-
-    res.json({
-      success: true,
-      kpis: {
-        todayRevenue: Number(todayRevenue.toFixed(2)),
-        totalOrdersCount,
-        avgOrderValue: Number(avgOrderValue.toFixed(2)),
-        lowStockCount,
-        currency: settings.currency || "₹"
-      },
-      charts: {
-        weeklySales: { labels: days, data: weeklySales },
-        categoryShare: categoryTotals
-      },
-      topProducts,
-      recentTransactions
-    });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// -------------------------------------------------------------
-// 8. STORE SETTINGS & SYSTEM STORAGE API
-// -------------------------------------------------------------
-// Get Settings
-app.get('/api/settings', async (req, res) => {
-  try {
-    let settings = await db.get("SELECT * FROM settings WHERE id = 1;");
-    if (!settings) {
-      settings = SEED_DATA.settings;
-    }
-    res.json({ success: true, settings });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// Update Settings
-app.put('/api/settings', async (req, res) => {
-  try {
-    const existing = (await db.get("SELECT * FROM settings WHERE id = 1;")) || SEED_DATA.settings;
-    const {
-      storeName,
-      storeTagline,
-      storeAddress,
-      storePhone,
-      taxId,
-      currency,
-      defaultTaxRate,
-      lowStockThreshold,
-      receiptFooter,
-      theme
-    } = req.body;
-
-    await db.run(
-      `UPDATE settings
-       SET storeName = ?, storeTagline = ?, storeAddress = ?, storePhone = ?, taxId = ?, currency = ?, defaultTaxRate = ?, lowStockThreshold = ?, receiptFooter = ?, theme = ?
-       WHERE id = 1;`,
-      [
-        storeName !== undefined ? storeName : existing.storeName,
-        storeTagline !== undefined ? storeTagline : existing.storeTagline,
-        storeAddress !== undefined ? storeAddress : existing.storeAddress,
-        storePhone !== undefined ? storePhone : existing.storePhone,
-        taxId !== undefined ? taxId : existing.taxId,
-        currency !== undefined ? currency : existing.currency,
-        defaultTaxRate !== undefined ? parseFloat(defaultTaxRate) : existing.defaultTaxRate,
-        lowStockThreshold !== undefined ? parseInt(lowStockThreshold) : existing.lowStockThreshold,
-        receiptFooter !== undefined ? receiptFooter : existing.receiptFooter,
-        theme !== undefined ? theme : existing.theme
-      ]
-    );
-
-    const updated = await db.get("SELECT * FROM settings WHERE id = 1;");
-    res.json({ success: true, message: "Settings updated successfully.", settings: updated });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// Factory Reset Database
-app.post('/api/settings/reset', async (req, res) => {
-  try {
-    await db.resetToDefaults();
-    res.json({
-      success: true,
-      message: "Database has been reset back to default demo catalog and initial seed data."
-    });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// Fallback route for SPA index.html
-app.get('*', (req, res) => {
-  if (req.path.startsWith('/api')) {
-    return res.status(404).json({ success: false, message: "API endpoint not found." });
-  }
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-// -------------------------------------------------------------
-// START SERVER & DATABASE INITIALIZATION
-// -------------------------------------------------------------
-async function startServer() {
-  try {
-    await db.init();
-    app.listen(PORT, () => {
-      console.log("=================================================");
-      console.log(`🚀 ApexPOS Server running on http://localhost:${PORT}`);
-      console.log(`📡 REST API Endpoints active at http://localhost:${PORT}/api`);
-      console.log(`📁 Database Engine: ${db.isSqlite ? 'SQLite3 (pos.db)' : 'Fallback JSON Storage'}`);
-      console.log("=================================================");
-    });
-  } catch (error) {
-    console.error("❌ Failed to start ApexPOS server:", error);
-    process.exit(1);
-  }
-}
-
-startServer();
+    const todayDayIdx = (new Date().getDay() +
