@@ -1,6 +1,6 @@
 /**
  * Data Storage & API Sync Layer
- * Handles live SQLite server persistence with local storage fallback
+ * Connects directly to Render Express/SQLite backend
  */
 
 const DB = {
@@ -13,32 +13,34 @@ const DB = {
   },
 
   async checkHealth() {
-    const badge = document.getElementById("backend-status-badge") || document.querySelector(".status-badge");
+    const statusPill = document.getElementById("backend-status-pill");
     try {
       const res = await fetch(`${this.baseUrl}/health`);
       if (res.ok) {
         const data = await res.json();
         if (data.status === "online") {
           this.isOnline = true;
-          if (badge) {
-            badge.textContent = "Backend: SQLite Live";
-            badge.className = "badge bg-success";
-            badge.style.backgroundColor = "#28a745";
-            badge.style.color = "#ffffff";
+          if (statusPill) {
+            statusPill.className = "server-status-pill online";
+            statusPill.innerHTML = `
+              <span class="status-dot"></span>
+              <span>Backend: SQLite Live</span>
+            `;
           }
           return;
         }
       }
     } catch (err) {
-      console.warn("Backend unavailable, using local cache:", err);
+      console.warn("Backend connection check failed, using local fallback:", err);
     }
 
     this.isOnline = false;
-    if (badge) {
-      badge.textContent = "Backend: Offline (Cache)";
-      badge.className = "badge bg-warning";
-      badge.style.backgroundColor = "#ffc107";
-      badge.style.color = "#000000";
+    if (statusPill) {
+      statusPill.className = "server-status-pill offline";
+      statusPill.innerHTML = `
+        <span class="status-dot"></span>
+        <span>Backend: Offline (Cache)</span>
+      `;
     }
   },
 
