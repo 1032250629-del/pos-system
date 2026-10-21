@@ -1,5 +1,5 @@
 /**
- * Reactive Shopping Cart Engine
+ * Reactive Cart Engine
  */
 
 const Cart = {
@@ -7,25 +7,13 @@ const Cart = {
   customer: { id: "cust-0", name: "Walk-in Customer", points: 0 },
   discountType: "percent",
   discountValue: 0,
-  listeners: [],
 
   init() {
     this.notify();
   },
 
-  subscribe(callback) {
-    if (typeof callback === "function") {
-      this.listeners.push(callback);
-    }
-  },
-
   notify(lastUpdatedId = null) {
     const summary = this.getSummary();
-    this.listeners.forEach(cb => {
-      if (typeof cb === "function") {
-        cb(this.items, summary, this.customer, lastUpdatedId);
-      }
-    });
     if (typeof Pos !== "undefined" && typeof Pos.renderCartUI === "function") {
       Pos.renderCartUI(this.items, summary);
     }
@@ -100,7 +88,7 @@ const Cart = {
     }
 
     const taxable = Math.max(0, subtotal - discountAmount);
-    const tax = taxable * 0.05; // 5% GST
+    const tax = taxable * 0.05;
     const grandTotal = taxable + tax;
 
     return {
