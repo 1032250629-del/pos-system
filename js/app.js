@@ -14,11 +14,10 @@ const App = {
     this.bindModals();
     this.initRoleSwitchModal();
 
-    // Check Backend Connection Health
-    await this.checkBackendStatus();
-
-    // Initialize Database & Subsystems
+    // Initialize Database & Sync from Backend first
     await DB.init();
+
+    // Initialize Subsystems
     Auth.init();
     Cart.init();
     Pos.init();
@@ -30,26 +29,6 @@ const App = {
 
     // Navigate to initial view
     this.navigate("pos");
-  },
-
-  async checkBackendStatus() {
-    const statusBadge = document.getElementById("backend-status-badge") || document.querySelector(".status-badge");
-    try {
-      const res = await fetch("/api/health");
-      const data = await res.json();
-      if (data.status === "online") {
-        if (statusBadge) {
-          statusBadge.textContent = "Backend: SQLite Live";
-          statusBadge.className = "badge bg-success";
-        }
-      }
-    } catch (err) {
-      console.warn("Backend health check fallback:", err);
-      if (statusBadge) {
-        statusBadge.textContent = "Backend: Offline (Cache)";
-        statusBadge.className = "badge bg-warning";
-      }
-    }
   },
 
   initClock() {
@@ -77,6 +56,7 @@ const App = {
   },
 
   navigate(viewId) {
+    // Check role permissions for restricted views
     if ((viewId === "settings") && !Auth.isAdmin()) {
       this.toast("Access Restricted", "Settings are only accessible by Store Managers/Admins.", "warning");
       return;
@@ -84,6 +64,7 @@ const App = {
 
     this.activeView = viewId;
 
+    // Update active sidebar nav
     document.querySelectorAll(".nav-item").forEach(item => {
       const btn = item.querySelector("button");
       if (btn && btn.dataset.view === viewId) {
@@ -93,10 +74,11 @@ const App = {
       }
     });
 
+    // Update Top Header Title
     const titleMap = {
       pos: "POS Billing Terminal",
       dashboard: "Analytics & Store Dashboard",
-      inventory: "Inventory & Catalog",
+      inventory: "Inventory & Stock Catalog",
       transactions: "Sales History & Orders",
       customers: "Customer Directory & CRM",
       settings: "System & Store Settings"
@@ -104,18 +86,21 @@ const App = {
     const titleEl = document.getElementById("header-page-title");
     if (titleEl) titleEl.textContent = titleMap[viewId] || "Point of Sale";
 
+    // Show corresponding view container
     document.querySelectorAll(".view-container").forEach(view => {
       view.classList.add("hidden");
     });
     const targetEl = document.getElementById(`${viewId}-view`);
     if (targetEl) targetEl.classList.remove("hidden");
 
+    // Refresh view specific data when navigating
     if (viewId === "dashboard") Dashboard.init();
     if (viewId === "inventory") Inventory.renderProductsTable();
     if (viewId === "transactions") Transactions.renderTransactionsTable();
     if (viewId === "customers") Customers.renderCustomersTable();
     if (viewId === "settings") Settings.loadSettings();
     if (viewId === "pos") {
+      Pos.renderCategoryBar();
       Pos.renderCatalog();
       setTimeout(() => {
         const searchInput = document.getElementById("pos-search-input");
@@ -126,6 +111,7 @@ const App = {
 
   bindShortcuts() {
     window.addEventListener("keydown", (e) => {
+      // Prevent browser default on POS Function Keys
       if (["F1", "F2", "F3", "F4", "F8", "F9"].includes(e.key)) {
         e.preventDefault();
       }
@@ -157,6 +143,7 @@ const App = {
   },
 
   bindModals() {
+    // Backdrop click to dismiss
     document.querySelectorAll(".modal-backdrop").forEach(backdrop => {
       backdrop.addEventListener("click", (e) => {
         if (e.target === backdrop) {
@@ -165,6 +152,7 @@ const App = {
       });
     });
 
+    // Close button clicks
     document.querySelectorAll(".btn-close-modal").forEach(btn => {
       btn.addEventListener("click", () => {
         const modal = btn.closest(".modal-backdrop");
@@ -224,6 +212,9 @@ const App = {
     }
   },
 
+  /**
+   * Sound synthesizer using Web Audio API
+   */
   playBeep(type = "scan") {
     try {
       if (!this.audioCtx) {
@@ -239,14 +230,14 @@ const App = {
       gain.connect(this.audioCtx.destination);
 
       if (type === "scan") {
-        osc.frequency.setValueAtTime(880, this.audioCtx.currentTime);
+        osc.frequency.setValueAtTime(880, this.audioCtx.currentTime); // A5
         gain.gain.setValueAtTime(0.1, this.audioCtx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + 0.08);
         osc.start();
         osc.stop(this.audioCtx.currentTime + 0.08);
       } else if (type === "success") {
-        osc.frequency.setValueAtTime(523.25, this.audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(1046.5, this.audioCtx.currentTime + 0.2);
+        osc.frequency.setValueAtTime(523.25, this.audioCtx.currentTime); // C5
+        osc.frequency.exponentialRampToValueAtTime(1046.5, this.audioCtx.currentTime + 0.2); // C6
         gain.gain.setValueAtTime(0.15, this.audioCtx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + 0.35);
         osc.start();
@@ -260,10 +251,13 @@ const App = {
         osc.stop(this.audioCtx.currentTime + 0.2);
       }
     } catch (e) {
-      // Audio fallback
+      // Audio context might be restricted before user gesture
     }
   },
 
+  /**
+   * Global Toast Notification System
+   */
   toast(title, message, type = "info", duration = 3000) {
     const container = document.getElementById("toast-container");
     if (!container) return;
@@ -296,6 +290,7 @@ const App = {
   }
 };
 
+// Start application when DOM is ready
 document.addEventListener("DOMContentLoaded", () => {
   App.init();
 });
