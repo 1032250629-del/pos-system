@@ -98,5 +98,31 @@ const Cart = {
       discount: Number(discountAmount.toFixed(2)),
       grandTotal: Number(grandTotal.toFixed(2))
     };
+  },
+
+  checkout(paymentMethod = "Cash") {
+    if (this.items.length === 0) return false;
+
+    const summary = this.getSummary();
+    const transaction = {
+      id: "TXN-" + Date.now(),
+      date: new Date().toISOString(),
+      customer: this.customer,
+      items: JSON.parse(JSON.stringify(this.items)),
+      summary: summary,
+      paymentMethod: paymentMethod
+    };
+
+    // Store in LocalStorage history
+    try {
+      const history = JSON.parse(localStorage.getItem("pos_transactions") || "[]");
+      history.unshift(transaction);
+      localStorage.setItem("pos_transactions", JSON.stringify(history));
+    } catch (e) {
+      console.error("Failed to save transaction", e);
+    }
+
+    this.clear();
+    return transaction;
   }
 };
