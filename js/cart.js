@@ -1,10 +1,10 @@
 /**
- * Reactive Cart Engine
+ * Reactive Shopping Cart Subsystem
  */
 
 const Cart = {
   items: [],
-  customer: { id: "cust-0", name: "Walk-in Customer", points: 0 },
+  customer: { id: "cust-0", name: "Walk-in Customer", points: 120, phone: "+91 98765 43210" },
   discountType: "percent",
   discountValue: 0,
 
@@ -17,6 +17,13 @@ const Cart = {
     if (typeof Pos !== "undefined" && typeof Pos.renderCartUI === "function") {
       Pos.renderCartUI(this.items, summary);
     }
+  },
+
+  setCustomer(cust) {
+    this.customer = cust;
+    const nameEl = document.getElementById("cart-customer-name");
+    if (nameEl) nameEl.textContent = cust.name;
+    this.notify();
   },
 
   addItem(product, qty = 1) {
@@ -88,7 +95,7 @@ const Cart = {
     }
 
     const taxable = Math.max(0, subtotal - discountAmount);
-    const tax = taxable * 0.05;
+    const tax = taxable * 0.05; // 5% GST
     const grandTotal = taxable + tax;
 
     return {
@@ -105,7 +112,7 @@ const Cart = {
 
     const summary = this.getSummary();
     const transaction = {
-      id: "TXN-" + Date.now(),
+      id: "TXN-" + Math.floor(100000 + Math.random() * 900000),
       date: new Date().toISOString(),
       customer: this.customer,
       items: JSON.parse(JSON.stringify(this.items)),
@@ -113,7 +120,6 @@ const Cart = {
       paymentMethod: paymentMethod
     };
 
-    // Store in LocalStorage history
     try {
       const history = JSON.parse(localStorage.getItem("pos_transactions") || "[]");
       history.unshift(transaction);
