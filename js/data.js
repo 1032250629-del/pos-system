@@ -83,7 +83,6 @@ const DB = {
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       } catch (e) {}
 
-      // Default catalog fallback
       return [
         { id: "p1", name: "Artisan Cappuccino", price: 220, stock: 45, category: "beverages", icon: "☕", sku: "BEV-001" },
         { id: "p2", name: "Cold Brew Coffee", price: 250, stock: 30, category: "beverages", icon: "🥤", sku: "BEV-002" },
