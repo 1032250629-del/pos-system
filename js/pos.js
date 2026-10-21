@@ -1,5 +1,5 @@
 /**
- * POS Catalog & Billing Module
+ * POS Catalog & Billing Terminal Module
  */
 
 const Pos = {
@@ -31,6 +31,18 @@ const Pos = {
     if (scrollRight && categoryBar) {
       scrollRight.onclick = () => categoryBar.scrollBy({ left: 200, behavior: "smooth" });
     }
+
+    const barcodeBtn = document.getElementById("pos-barcode-btn");
+    if (barcodeBtn) {
+      barcodeBtn.onclick = () => {
+        const products = DB.products.getAll();
+        if (products.length > 0) {
+          const randomItem = products[Math.floor(Math.random() * products.length)];
+          Cart.addItem(randomItem.id);
+          if (typeof App !== 'undefined') App.playBeep("scan");
+        }
+      };
+    }
   },
 
   renderCategoryBar() {
@@ -38,7 +50,7 @@ const Pos = {
     if (!container) return;
 
     let categories = DB.categories.getAll();
-    if (!categories || categories.length === 0) {
+    if (!Array.isArray(categories) || categories.length === 0) {
       categories = [
         { id: "all", name: "All Items", icon: "🏷️" },
         { id: "beverages", name: "Beverages", icon: "☕" },
@@ -82,19 +94,6 @@ const Pos = {
 
     let products = DB.products.getAll();
 
-    // Fallback to default demo items if local cache is fresh
-    if (!products || products.length === 0) {
-      products = [
-        { id: "p1", name: "Artisan Cappuccino", price: 220, stock: 45, category: "beverages", icon: "☕", sku: "BEV-001" },
-        { id: "p2", name: "Cold Brew Coffee", price: 250, stock: 30, category: "beverages", icon: "🥤", sku: "BEV-002" },
-        { id: "p3", name: "Butter Croissant", price: 140, stock: 20, category: "bakery", icon: "🥐", sku: "BAK-001" },
-        { id: "p4", name: "Blueberry Muffin", price: 160, stock: 15, category: "bakery", icon: "🧁", sku: "BAK-002" },
-        { id: "p5", name: "Avocado Sourdough Toast", price: 320, stock: 12, category: "snacks", icon: "🥑", sku: "SNK-001" },
-        { id: "p6", name: "Club Sandwich", price: 280, stock: 18, category: "snacks", icon: "🥪", sku: "SNK-002" }
-      ];
-      DB.products.setAll(products);
-    }
-
     if (this.activeCategory !== "all") {
       products = products.filter(p => p.category === this.activeCategory);
     }
@@ -107,7 +106,7 @@ const Pos = {
       );
     }
 
-    if (products.length === 0) {
+    if (!Array.isArray(products) || products.length === 0) {
       grid.innerHTML = `
         <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--text-muted);">
           <div style="font-size: 2.5rem; margin-bottom: 8px;">🔍</div>
@@ -118,14 +117,26 @@ const Pos = {
     }
 
     grid.innerHTML = products.map(p => `
-      <div class="product-card" onclick="Cart.addItem('${p.id}')">
-        <div class="product-card-top">
-          <span class="product-icon">${p.icon || '📦'}</span>
-          <span class="product-stock-badge ${p.stock <= 5 ? 'low-stock' : ''}">${p.stock} left</span>
+      <div class="product-card" onclick="Cart.addItem('${p.id}')" style="cursor: pointer;">
+        <div class="product-card-top" style="display: flex; justify-content: space-between; align-items: center;">
+          <span class="product-icon" style="font-size: 1.8rem;">${p.icon || '📦'}</span>
+          <span class="product-stock-badge ${p.stock <= 5 ? 'low-stock' : ''}" style="font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; background: rgba(0,0,0,0.05);">${p.stock} left</span>
         </div>
-        <div class="product-card-title">${p.name}</div>
-        <div class="product-card-price">₹${parseFloat(p.price).toFixed(2)}</div>
+        <div class="product-card-title" style="font-weight: 600; margin-top: 8px;">${p.name}</div>
+        <div class="product-card-price" style="font-weight: 700; color: var(--primary-600); margin-top: 4px;">₹${parseFloat(p.price).toFixed(2)}</div>
       </div>
     `).join("");
+  },
+
+  openHeldOrdersModal() {
+    if (typeof PosModal !== 'undefined' && PosModal.openHeld) {
+      PosModal.openHeld();
+    }
+  },
+
+  openDiscountModal() {
+    if (typeof PosModal !== 'undefined' && PosModal.openDiscount) {
+      PosModal.openDiscount();
+    }
   }
 };
