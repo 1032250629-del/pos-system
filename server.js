@@ -1,6 +1,6 @@
 /**
- * ApexPOS Backend Server
- * Node.js, Express, SQLite3 (pos.db), CORS
+ * ApexPOS Backend Server & Static Asset Provider
+ * Technology Stack: Node.js, Express, SQLite3 (pos.db), CORS
  */
 
 const express = require('express');
@@ -18,15 +18,37 @@ let activeUser = {
   avatar: "AM"
 };
 
-// Middleware
+// Global CORS & Header Middleware
 app.use(cors({ origin: '*' }));
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve all static frontend files (CSS, JS, images, index.html)
+// Serve static frontend files (CSS, JS, images, HTML)
 app.use(express.static(__dirname));
 
-// Health Check API
+// Request Logger
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    if (req.originalUrl.startsWith('/api')) {
+      console.log(`[${req.method}] ${req.originalUrl} -> ${res.statusCode} (${duration}ms)`);
+    }
+  });
+  next();
+});
+
+// API Routes
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'online',
@@ -37,7 +59,6 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Auth API
 app.get('/api/auth/users', async (req, res) => {
   try {
     const users = await db.all("SELECT id, name, role, avatar FROM users;");
@@ -50,12 +71,17 @@ app.get('/api/auth/users', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { userId, pin } = req.body;
-    if (!userId) return res.status(400).json({ success: false, message: "User ID required." });
+    if (!userId) return res.status(400).json({ success: false, message: "User ID is required." });
     const user = await db.get("SELECT * FROM users WHERE id = ?;", [userId]);
     if (!user) return res.status(404).json({ success: false, message: "User not found." });
-    if (user.pin && user.pin !== pin) return res.status(401).json({ success: false, message: "Incorrect PIN." });
+    if (user.pin && user.pin !== pin) return res.status(401).json({ success: false, message: "Incorrect PIN code." });
 
-    activeUser = { id: user.id, name: user.name, role: user.role, avatar: user.avatar || user.name.substring(0, 2).toUpperCase() };
+    activeUser = {
+      id: user.id,
+      name: user.name,
+      role: user.role,
+      avatar: user.avatar || user.name.substring(0, 2).toUpperCase()
+    };
     res.json({ success: true, message: `Logged in as ${user.name}`, user: activeUser });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -78,10 +104,9 @@ app.post('/api/auth/switch', async (req, res) => {
 
 app.post('/api/auth/logout', (req, res) => {
   activeUser = { id: "usr-2", name: "Sarah Connor", role: "cashier", avatar: "SC" };
-  res.json({ success: true, message: "Switched to default cashier.", user: activeUser });
+  res.json({ success: true, message: "Session ended. Switched to default cashier.", user: activeUser });
 });
 
-// Products API
 app.get('/api/products', async (req, res) => {
   try {
     const { category, search, stockFilter } = req.query;
@@ -89,7 +114,11 @@ app.get('/api/products', async (req, res) => {
     if (category && category !== 'all') products = products.filter(p => p.category === category);
     if (search) {
       const q = search.toLowerCase().trim();
-      products = products.filter(p => p.name.toLowerCase().includes(q) || (p.sku && p.sku.toLowerCase().includes(q)) || (p.barcode && p.barcode.toLowerCase().includes(q)));
+      products = products.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        (p.sku && p.sku.toLowerCase().includes(q)) ||
+        (p.barcode && p.barcode.toLowerCase().includes(q))
+      );
     }
     if (stockFilter === 'low') {
       const settings = await db.get("SELECT lowStockThreshold FROM settings WHERE id = 1;");
@@ -107,8 +136,11 @@ app.get('/api/products', async (req, res) => {
 app.get('/api/products/lookup/:code', async (req, res) => {
   try {
     const code = req.params.code.trim();
-    const product = await db.get("SELECT * FROM products WHERE LOWER(barcode) = LOWER(?) OR LOWER(sku) = LOWER(?) LIMIT 1;", [code, code]);
-    if (!product) return res.status(404).json({ success: false, message: "Product not found." });
+    const product = await db.get(
+      "SELECT * FROM products WHERE LOWER(barcode) = LOWER(?) OR LOWER(sku) = LOWER(?) LIMIT 1;",
+      [code, code]
+    );
+    if (!product) return res.status(404).json({ success: false, message: "No product matches this barcode or SKU." });
     res.json({ success: true, product });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -128,17 +160,18 @@ app.get('/api/products/:id', async (req, res) => {
 app.post('/api/products', async (req, res) => {
   try {
     const { name, sku, barcode, category, price, costPrice, taxRate, stock, icon, description } = req.body;
-    if (!name || price === undefined) return res.status(400).json({ success: false, message: "Name and price required." });
+    if (!name || price === undefined) return res.status(400).json({ success: false, message: "Product name and price required." });
     const id = req.body.id || `prod-${Date.now()}`;
     const generatedSku = sku || `SKU-${Math.floor(1000 + Math.random() * 9000)}`;
     const generatedBarcode = barcode || String(Math.floor(1000000000 + Math.random() * 9000000000));
 
     await db.run(
-      `INSERT INTO products (id, name, sku, barcode, category, price, costPrice, taxRate, stock, icon, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+      `INSERT INTO products (id, name, sku, barcode, category, price, costPrice, taxRate, stock, icon, description)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
       [id, name.trim(), generatedSku, generatedBarcode, category || 'beverages', parseFloat(price) || 0, parseFloat(costPrice) || 0, taxRate !== undefined ? parseFloat(taxRate) : 5.0, parseInt(stock) || 0, icon || '📦', description || '']
     );
     const newProduct = await db.get("SELECT * FROM products WHERE id = ?;", [id]);
-    res.status(201).json({ success: true, product: newProduct });
+    res.status(201).json({ success: true, message: "Product created successfully.", product: newProduct });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -156,7 +189,7 @@ app.put('/api/products/:id', async (req, res) => {
       [name !== undefined ? name.trim() : existing.name, sku !== undefined ? sku.trim() : existing.sku, barcode !== undefined ? barcode.trim() : existing.barcode, category !== undefined ? category : existing.category, price !== undefined ? parseFloat(price) : existing.price, costPrice !== undefined ? parseFloat(costPrice) : existing.costPrice, taxRate !== undefined ? parseFloat(taxRate) : existing.taxRate, stock !== undefined ? parseInt(stock) : existing.stock, icon !== undefined ? icon : existing.icon, description !== undefined ? description : existing.description, id]
     );
     const updated = await db.get("SELECT * FROM products WHERE id = ?;", [id]);
-    res.json({ success: true, product: updated });
+    res.json({ success: true, message: "Product updated successfully.", product: updated });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -175,7 +208,7 @@ app.patch('/api/products/:id/stock', async (req, res) => {
 
     await db.run("UPDATE products SET stock = ? WHERE id = ?;", [newStock, id]);
     const updated = await db.get("SELECT * FROM products WHERE id = ?;", [id]);
-    res.json({ success: true, product: updated });
+    res.json({ success: true, message: "Stock updated.", product: updated });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -215,14 +248,17 @@ app.post('/api/categories', async (req, res) => {
   }
 });
 
-// Customers API
 app.get('/api/customers', async (req, res) => {
   try {
     const { search } = req.query;
     let customers = await db.all("SELECT * FROM customers ORDER BY totalSpent DESC;");
     if (search) {
       const q = search.toLowerCase().trim();
-      customers = customers.filter(c => c.name.toLowerCase().includes(q) || (c.phone && c.phone.includes(q)) || (c.email && c.email.toLowerCase().includes(q)));
+      customers = customers.filter(c =>
+        c.name.toLowerCase().includes(q) ||
+        (c.phone && c.phone.includes(q)) ||
+        (c.email && c.email.toLowerCase().includes(q))
+      );
     }
     res.json({ success: true, count: customers.length, customers });
   } catch (err) {
@@ -292,7 +328,6 @@ app.patch('/api/customers/:id/points', async (req, res) => {
   }
 });
 
-// Orders API
 app.post('/api/orders', async (req, res) => {
   try {
     const { cashier, customer, items, subtotal, tax, discount, grandTotal, paymentMethod, tenderedAmount, changeDue } = req.body;
@@ -322,7 +357,8 @@ app.post('/api/orders', async (req, res) => {
     }
 
     await db.run(
-      `INSERT INTO orders (id, invoiceNumber, timestamp, cashier, customer, items, subtotal, tax, discount, grandTotal, paymentMethod, tenderedAmount, changeDue, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+      `INSERT INTO orders (id, invoiceNumber, timestamp, cashier, customer, items, subtotal, tax, discount, grandTotal, paymentMethod, tenderedAmount, changeDue, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
       [orderId, invoiceNumber, timestamp, cashier || activeUser.name, JSON.stringify(customer || { id: "cust-0", name: "Walk-in Customer" }), JSON.stringify(items), parseFloat(subtotal) || 0, parseFloat(tax) || 0, parseFloat(discount) || 0, parseFloat(grandTotal) || 0, paymentMethod || 'cash', parseFloat(tenderedAmount) || grandTotal, parseFloat(changeDue) || 0, 'completed']
     );
 
@@ -398,7 +434,6 @@ app.post('/api/orders/:id/refund', async (req, res) => {
   }
 });
 
-// Held Orders API
 app.get('/api/held-orders', async (req, res) => {
   try {
     const raw = await db.all("SELECT * FROM held_orders ORDER BY timestamp DESC;");
@@ -421,7 +456,8 @@ app.post('/api/held-orders', async (req, res) => {
     const id = `HOLD-${Date.now()}`;
     const timestamp = new Date().toISOString();
     await db.run(
-      `INSERT INTO held_orders (id, timestamp, customer, items, discountType, discountValue, summary, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
+      `INSERT INTO held_orders (id, timestamp, customer, items, discountType, discountValue, summary, note)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
       [id, timestamp, JSON.stringify(customer || { id: "cust-0", name: "Walk-in Customer" }), JSON.stringify(items || []), discountType || 'percent', parseFloat(discountValue) || 0, JSON.stringify(summary || {}), note || `Held bill #${id}`]
     );
     res.status(201).json({ success: true, heldOrder: { id, timestamp, customer, items, discountType, discountValue, summary, note } });
@@ -439,7 +475,6 @@ app.delete('/api/held-orders/:id', async (req, res) => {
   }
 });
 
-// Dashboard API
 app.get('/api/dashboard/stats', async (req, res) => {
   try {
     const settings = (await db.get("SELECT * FROM settings WHERE id = 1;")) || SEED_DATA.settings;
@@ -481,95 +516,4 @@ app.get('/api/dashboard/stats', async (req, res) => {
 
     const itemMap = {};
     orders.forEach(o => {
-      if (o.items && Array.isArray(o.items)) {
-        o.items.forEach(it => {
-          if (!itemMap[it.id]) itemMap[it.id] = { id: it.id, name: it.name, count: 0, revenue: 0 };
-          itemMap[it.id].count += it.qty;
-          itemMap[it.id].revenue += it.total || (it.price * it.qty);
-        });
-      }
-    });
-    const topProducts = Object.values(itemMap).sort((a, b) => b.count - a.count).slice(0, 5);
-
-    const recentOrders = await db.all("SELECT * FROM orders ORDER BY timestamp DESC LIMIT 5;");
-    const recentTransactions = recentOrders.map(o => {
-      try { o.customer = JSON.parse(o.customer); } catch (e) {}
-      try { o.items = JSON.parse(o.items); } catch (e) {}
-      return o;
-    });
-
-    res.json({
-      success: true,
-      kpis: { todayRevenue: Number(todayRevenue.toFixed(2)), totalOrdersCount, avgOrderValue: Number(avgOrderValue.toFixed(2)), lowStockCount, currency: settings.currency || "₹" },
-      charts: { weeklySales: { labels: days, data: weeklySales }, categoryShare: categoryTotals },
-      topProducts,
-      recentTransactions
-    });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// Settings API
-app.get('/api/settings', async (req, res) => {
-  try {
-    let settings = await db.get("SELECT * FROM settings WHERE id = 1;");
-    if (!settings) settings = SEED_DATA.settings;
-    res.json({ success: true, settings });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-app.put('/api/settings', async (req, res) => {
-  try {
-    const existing = (await db.get("SELECT * FROM settings WHERE id = 1;")) || SEED_DATA.settings;
-    const { storeName, storeTagline, storeAddress, storePhone, taxId, currency, defaultTaxRate, lowStockThreshold, receiptFooter, theme } = req.body;
-
-    await db.run(
-      `UPDATE settings SET storeName = ?, storeTagline = ?, storeAddress = ?, storePhone = ?, taxId = ?, currency = ?, defaultTaxRate = ?, lowStockThreshold = ?, receiptFooter = ?, theme = ? WHERE id = 1;`,
-      [storeName !== undefined ? storeName : existing.storeName, storeTagline !== undefined ? storeTagline : existing.storeTagline, storeAddress !== undefined ? storeAddress : existing.storeAddress, storePhone !== undefined ? storePhone : existing.storePhone, taxId !== undefined ? taxId : existing.taxId, currency !== undefined ? currency : existing.currency, defaultTaxRate !== undefined ? parseFloat(defaultTaxRate) : existing.defaultTaxRate, lowStockThreshold !== undefined ? parseInt(lowStockThreshold) : existing.lowStockThreshold, receiptFooter !== undefined ? receiptFooter : existing.receiptFooter, theme !== undefined ? theme : existing.theme]
-    );
-    const updated = await db.get("SELECT * FROM settings WHERE id = 1;");
-    res.json({ success: true, message: "Settings updated successfully.", settings: updated });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-app.post('/api/settings/reset', async (req, res) => {
-  try {
-    await db.resetToDefaults();
-    res.json({ success: true, message: "Database reset to default demo catalog." });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// Always serve index.html for root and SPA routes
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-app.get('*', (req, res) => {
-  if (req.path.startsWith('/api')) {
-    return res.status(404).json({ success: false, message: "API endpoint not found." });
-  }
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-// Start Server and Database
-async function startServer() {
-  try {
-    await db.init();
-    app.listen(PORT, () => {
-      console.log(`🚀 ApexPOS Server running on port ${PORT}`);
-    });
-  } catch (error) {
-    console.error("❌ Startup error:", error);
-  }
-}
-
-startServer();
-
-module.exports = app;
+      if
