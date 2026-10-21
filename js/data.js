@@ -92,6 +92,9 @@ const DB = {
         { id: "p6", name: "Club Sandwich", price: 280, stock: 18, category: "snacks", icon: "🥪", sku: "SNK-002" }
       ];
     },
+    getById(id) {
+      return this.getAll().find(p => p.id === id);
+    },
     setAll(data) {
       if (Array.isArray(data)) {
         localStorage.setItem("pos_products", JSON.stringify(data));
@@ -134,6 +137,36 @@ const DB = {
       if (Array.isArray(data)) {
         localStorage.setItem("pos_customers", JSON.stringify(data));
       }
+    }
+  },
+
+  settings: {
+    get() {
+      try {
+        const data = localStorage.getItem("pos_settings");
+        if (data) return JSON.parse(data);
+      } catch(e) {}
+      return { defaultTaxRate: 5.0, currency: "₹", storeName: "ApexPOS" };
+    }
+  },
+
+  heldOrders: {
+    getAll() {
+      try { return JSON.parse(localStorage.getItem("pos_held_orders") || "[]"); } catch(e) { return []; }
+    },
+    getById(id) {
+      return this.getAll().find(o => o.id === id);
+    },
+    add(order) {
+      const orders = this.getAll();
+      const newOrder = { ...order, id: "HOLD-" + Date.now() };
+      orders.push(newOrder);
+      localStorage.setItem("pos_held_orders", JSON.stringify(orders));
+      return newOrder;
+    },
+    remove(id) {
+      const orders = this.getAll().filter(o => o.id !== id);
+      localStorage.setItem("pos_held_orders", JSON.stringify(orders));
     }
   },
 
