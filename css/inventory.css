@@ -1,0 +1,82 @@
+/* ==========================================================================
+   Inventory, Transactions, Customers & Settings Styles
+   ========================================================================== */
+
+.page-view-wrapper {
+  padding: var(--space-6);
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.page-actions-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.search-filter-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  max-width: 600px;
+}
+
+.inventory-table-img {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background-color: var(--bg-surface-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+}
+
+/* Quick Stock Incrementer */
+.stock-adjust-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.stock-num {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  min-width: 32px;
+  text-align: center;
+}
+
+/* Settings Layout */
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: var(--space-5);
+}
+
+.settings-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-sm);
+}
+
+.settings-card-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
