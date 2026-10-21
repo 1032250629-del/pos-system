@@ -1,14 +1,17 @@
 {
   "name": "pos-system",
   "version": "1.0.0",
-  "description": "POS and Inventory Management System Backend",
+  "description": "ApexPOS - Point of Sale & Inventory Management Backend",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
-    "express": "^4.18.2",
+    "express": "^4.19.2",
     "sqlite3": "^5.1.7"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
