@@ -1,75 +1,60 @@
 /**
- * Authentication & Role Management
- * Handles Cashier vs Admin login, session persistence, and permission checks.
- * Integrates with Express /api/auth/login and /api/auth/current endpoints.
+ * Authentication & Staff Role Management
  */
 
 const Auth = {
-  currentUser: null,
-
-  init() {
-    this.currentUser = DB.auth.getActiveUser();
-    this.renderUserUI();
+  currentUser: {
+    id: "usr-1",
+    name: "Alex Morgan",
+    role: "admin",
+    avatar: "AM"
   },
 
-  getCurrentUser() {
-    return this.currentUser || DB.auth.getActiveUser();
+  init() {
+    this.renderUserInfo();
+  },
+
+  getActiveUser() {
+    return this.currentUser;
   },
 
   isAdmin() {
-    const user = this.getCurrentUser();
-    return user && user.role === "admin";
+    return this.currentUser && this.currentUser.role === "admin";
   },
 
-  async login(userId, pin) {
-    try {
-      const res = await DB.api('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ userId, pin })
-      });
-
-      if (res.success && res.user) {
-        this.currentUser = res.user;
-        DB.auth.setActiveUser(res.user);
-        this.renderUserUI();
-        return { success: true, user: res.user };
-      }
-      return { success: false, message: res.message || "Invalid credentials." };
-    } catch (e) {
-      // Offline fallback validation
-      const user = DB.users.getById(userId);
-      if (!user) {
-        return { success: false, message: "User not found" };
-      }
-      if (user.pin && user.pin !== pin) {
-        return { success: false, message: "Incorrect PIN code" };
-      }
-
-      this.currentUser = user;
-      DB.auth.setActiveUser(user);
-      this.renderUserUI();
-      return { success: true, user };
-    }
-  },
-
-  renderUserUI() {
-    const user = this.getCurrentUser();
+  renderUserInfo() {
     const avatarEl = document.getElementById("header-user-avatar");
     const nameEl = document.getElementById("header-user-name");
     const roleEl = document.getElementById("header-user-role");
 
-    if (avatarEl) avatarEl.textContent = user.avatar || user.name.substring(0, 2).toUpperCase();
-    if (nameEl) nameEl.textContent = user.name;
-    if (roleEl) roleEl.textContent = user.role;
+    if (avatarEl) avatarEl.textContent = this.currentUser.avatar || "AM";
+    if (nameEl) nameEl.textContent = this.currentUser.name || "Alex Morgan";
+    if (roleEl) roleEl.textContent = this.currentUser.role || "admin";
+  },
 
-    // Show/hide admin restricted elements
-    const adminElements = document.querySelectorAll(".admin-only");
-    adminElements.forEach(el => {
-      if (this.isAdmin()) {
-        el.classList.remove("hidden");
-      } else {
-        el.classList.add("hidden");
+  async login(userId, pin) {
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, pin })
+      });
+      const data = await res.json();
+      if (data.success && data.user) {
+        this.currentUser = data.user;
+        this.renderUserInfo();
+        return { success: true, user: data.user };
       }
-    });
+      return { success: false, message: data.message || "Invalid credentials." };
+    } catch (err) {
+      const users = DB.users ? DB.users.getAll() : [];
+      const user = users.find(u => u.id === userId);
+      if (user) {
+        this.currentUser = { ...user, avatar: user.name.substring(0, 2).toUpperCase() };
+        this.renderUserInfo();
+        return { success: true, user: this.currentUser };
+      }
+      return { success: false, message: "Authentication failed." };
+    }
   }
 };
