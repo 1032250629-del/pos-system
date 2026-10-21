@@ -22,7 +22,7 @@ app.use(cors({ origin: '*' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve frontend static assets (HTML, CSS, JS, icons)
+// Serve static frontend assets
 app.use(express.static(path.join(__dirname)));
 
 app.use((req, res, next) => {
@@ -493,4 +493,107 @@ app.get('/api/dashboard/stats', async (req, res) => {
     products.forEach(p => { prodMap[p.id] = p; });
 
     orders.forEach(o => {
-      if (o.items &&
+      if (o.items && Array.isArray(o.items)) {
+        o.items.forEach(it => {
+          const prod = prodMap[it.id];
+          const cat = prod ? prod.category : 'other';
+          categoryTotals[cat] = (categoryTotals[cat] || 0) + (it.total || (it.price * it.qty));
+        });
+      }
+    });
+
+    const itemMap = {};
+    orders.forEach(o => {
+      if (o.items && Array.isArray(o.items)) {
+        o.items.forEach(it => {
+          if (!itemMap[it.id]) itemMap[it.id] = { id: it.id, name: it.name, count: 0, revenue: 0 };
+          itemMap[it.id].count += it.qty;
+          itemMap[it.id].revenue += it.total || (it.price * it.qty);
+        });
+      }
+    });
+    const topProducts = Object.values(itemMap).sort((a, b) => b.count - a.count).slice(0, 5);
+
+    const recentOrders = await db.all("SELECT * FROM orders ORDER BY timestamp DESC LIMIT 5;");
+    const recentTransactions = recentOrders.map(o => {
+      try { o.customer = JSON.parse(o.customer); } catch (e) {}
+      try { o.items = JSON.parse(o.items); } catch (e) {}
+      return o;
+    });
+
+    res.json({
+      success: true,
+      kpis: {
+        todayRevenue: Number(todayRevenue.toFixed(2)),
+        totalOrdersCount,
+        avgOrderValue: Number(avgOrderValue.toFixed(2)),
+        lowStockCount,
+        currency: settings.currency || "₹"
+      },
+      charts: { weeklySales: { labels: days, data: weeklySales }, categoryShare: categoryTotals },
+      topProducts,
+      recentTransactions
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/settings', async (req, res) => {
+  try {
+    let settings = await db.get("SELECT * FROM settings WHERE id = 1;");
+    if (!settings) settings = SEED_DATA.settings;
+    res.json({ success: true, settings });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.put('/api/settings', async (req, res) => {
+  try {
+    const existing = (await db.get("SELECT * FROM settings WHERE id = 1;")) || SEED_DATA.settings;
+    const { storeName, storeTagline, storeAddress, storePhone, taxId, currency, defaultTaxRate, lowStockThreshold, receiptFooter, theme } = req.body;
+
+    await db.run(
+      `UPDATE settings SET storeName = ?, storeTagline = ?, storeAddress = ?, storePhone = ?, taxId = ?, currency = ?, defaultTaxRate = ?, lowStockThreshold = ?, receiptFooter = ?, theme = ? WHERE id = 1;`,
+      [storeName !== undefined ? storeName : existing.storeName, storeTagline !== undefined ? storeTagline : existing.storeTagline, storeAddress !== undefined ? storeAddress : existing.storeAddress, storePhone !== undefined ? storePhone : existing.storePhone, taxId !== undefined ? taxId : existing.taxId, currency !== undefined ? currency : existing.currency, defaultTaxRate !== undefined ? parseFloat(defaultTaxRate) : existing.defaultTaxRate, lowStockThreshold !== undefined ? parseInt(lowStockThreshold) : existing.lowStockThreshold, receiptFooter !== undefined ? receiptFooter : existing.receiptFooter, theme !== undefined ? theme : existing.theme]
+    );
+    const updated = await db.get("SELECT * FROM settings WHERE id = 1;");
+    res.json({ success: true, message: "Settings updated successfully.", settings: updated });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/settings/reset', async (req, res) => {
+  try {
+    await db.resetToDefaults();
+    res.json({ success: true, message: "Database reset back to default demo catalog." });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Fallback SPA route
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ success: false, message: "API endpoint not found." });
+  }
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Server Initialization
+async function startServer() {
+  try {
+    await db.init();
+    app.listen(PORT, () => {
+      console.log(`🚀 ApexPOS Server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error("❌ Server startup failed:", error);
+  }
+}
+
+startServer();
+
+module.exports = app;
