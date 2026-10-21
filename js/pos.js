@@ -1,5 +1,5 @@
 /**
- * POS Billing Terminal Controller
+ * POS Billing Terminal Module
  */
 
 const Pos = {
@@ -100,7 +100,7 @@ const Pos = {
           <span class="product-stock-badge" style="font-size: 0.75rem; padding: 2px 6px; border-radius: 4px; background: rgba(0,0,0,0.05);">${p.stock} left</span>
         </div>
         <div class="product-card-title" style="font-weight: 600; margin-top: 8px;">${p.name}</div>
-        <div class="product-card-price" style="font-weight: 700; color: var(--primary-600); margin-top: 4px;">₹${parseFloat(p.price).toFixed(2)}</div>
+        <div class="product-card-price" style="font-weight: 700; color: var(--primary-600, #4F46E5); margin-top: 4px;">₹${parseFloat(p.price).toFixed(2)}</div>
       </div>
     `).join("");
   },
@@ -136,7 +136,7 @@ const Pos = {
 
     if (items.length === 0) {
       cartContainer.innerHTML = `
-        <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+        <div style="text-align: center; padding: 40px; color: #9CA3AF;">
           <div style="font-size: 2rem; margin-bottom: 8px;">🛒</div>
           <p>Cart is currently empty</p>
         </div>
