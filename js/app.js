@@ -14,21 +14,29 @@ const App = {
     this.bindModals();
     this.initRoleSwitchModal();
 
-    // Initialize Database & Sync from Backend first
+    // 1. Initialize DB and sync data from SQLite backend
     await DB.init();
 
-    // Initialize Subsystems
-    Auth.init();
-    Cart.init();
-    Pos.init();
-    Dashboard.init();
-    Inventory.init();
-    Transactions.init();
-    Customers.init();
-    Settings.init();
+    // 2. Initialize Subsystems after DB load
+    if (typeof Auth !== "undefined") Auth.init();
+    if (typeof Cart !== "undefined") Cart.init();
+    if (typeof Pos !== "undefined") Pos.init();
+    if (typeof Dashboard !== "undefined") Dashboard.init();
+    if (typeof Inventory !== "undefined") Inventory.init();
+    if (typeof Transactions !== "undefined") Transactions.init();
+    if (typeof Customers !== "undefined") Customers.init();
+    if (typeof Settings !== "undefined") Settings.init();
 
-    // Navigate to initial view
+    // 3. Navigate to POS view and force catalog render
     this.navigate("pos");
+
+    // 4. Fallback rendering check to ensure UI populates
+    setTimeout(() => {
+      if (typeof Pos !== "undefined") {
+        Pos.renderCategoryBar();
+        Pos.renderCatalog();
+      }
+    }, 300);
   },
 
   initClock() {
@@ -56,15 +64,13 @@ const App = {
   },
 
   navigate(viewId) {
-    // Check role permissions for restricted views
-    if ((viewId === "settings") && !Auth.isAdmin()) {
+    if (viewId === "settings" && typeof Auth !== "undefined" && !Auth.isAdmin()) {
       this.toast("Access Restricted", "Settings are only accessible by Store Managers/Admins.", "warning");
       return;
     }
 
     this.activeView = viewId;
 
-    // Update active sidebar nav
     document.querySelectorAll(".nav-item").forEach(item => {
       const btn = item.querySelector("button");
       if (btn && btn.dataset.view === viewId) {
@@ -74,7 +80,6 @@ const App = {
       }
     });
 
-    // Update Top Header Title
     const titleMap = {
       pos: "POS Billing Terminal",
       dashboard: "Analytics & Store Dashboard",
@@ -86,20 +91,18 @@ const App = {
     const titleEl = document.getElementById("header-page-title");
     if (titleEl) titleEl.textContent = titleMap[viewId] || "Point of Sale";
 
-    // Show corresponding view container
     document.querySelectorAll(".view-container").forEach(view => {
       view.classList.add("hidden");
     });
     const targetEl = document.getElementById(`${viewId}-view`);
     if (targetEl) targetEl.classList.remove("hidden");
 
-    // Refresh view specific data when navigating
-    if (viewId === "dashboard") Dashboard.init();
-    if (viewId === "inventory") Inventory.renderProductsTable();
-    if (viewId === "transactions") Transactions.renderTransactionsTable();
-    if (viewId === "customers") Customers.renderCustomersTable();
-    if (viewId === "settings") Settings.loadSettings();
-    if (viewId === "pos") {
+    if (viewId === "dashboard" && typeof Dashboard !== "undefined") Dashboard.init();
+    if (viewId === "inventory" && typeof Inventory !== "undefined") Inventory.renderProductsTable();
+    if (viewId === "transactions" && typeof Transactions !== "undefined") Transactions.renderTransactionsTable();
+    if (viewId === "customers" && typeof Customers !== "undefined") Customers.renderCustomersTable();
+    if (viewId === "settings" && typeof Settings !== "undefined") Settings.loadSettings();
+    if (viewId === "pos" && typeof Pos !== "undefined") {
       Pos.renderCategoryBar();
       Pos.renderCatalog();
       setTimeout(() => {
@@ -111,7 +114,6 @@ const App = {
 
   bindShortcuts() {
     window.addEventListener("keydown", (e) => {
-      // Prevent browser default on POS Function Keys
       if (["F1", "F2", "F3", "F4", "F8", "F9"].includes(e.key)) {
         e.preventDefault();
       }
@@ -127,9 +129,9 @@ const App = {
         const holdBtn = document.getElementById("btn-hold-bill");
         if (holdBtn) holdBtn.click();
       } else if (e.key === "F3") {
-        Pos.openHeldOrdersModal();
+        if (typeof Pos !== "undefined") Pos.openHeldOrdersModal();
       } else if (e.key === "F4") {
-        Pos.openDiscountModal();
+        if (typeof Pos !== "undefined") Pos.openDiscountModal();
       } else if (e.key === "F8") {
         const payBtn = document.getElementById("btn-proceed-pay");
         if (payBtn && !payBtn.disabled) payBtn.click();
@@ -143,7 +145,6 @@ const App = {
   },
 
   bindModals() {
-    // Backdrop click to dismiss
     document.querySelectorAll(".modal-backdrop").forEach(backdrop => {
       backdrop.addEventListener("click", (e) => {
         if (e.target === backdrop) {
@@ -152,7 +153,6 @@ const App = {
       });
     });
 
-    // Close button clicks
     document.querySelectorAll(".btn-close-modal").forEach(btn => {
       btn.addEventListener("click", () => {
         const modal = btn.closest(".modal-backdrop");
@@ -184,7 +184,7 @@ const App = {
 
     if (triggerBtn && modal) {
       triggerBtn.onclick = () => {
-        const users = DB.users.getAll();
+        const users = typeof DB !== "undefined" && DB.users ? DB.users.getAll() : [];
         userSelect.innerHTML = users.map(u => `
           <option value="${u.id}">${u.name} (${u.role.toUpperCase()})</option>
         `).join("");
@@ -212,9 +212,6 @@ const App = {
     }
   },
 
-  /**
-   * Sound synthesizer using Web Audio API
-   */
   playBeep(type = "scan") {
     try {
       if (!this.audioCtx) {
@@ -230,14 +227,14 @@ const App = {
       gain.connect(this.audioCtx.destination);
 
       if (type === "scan") {
-        osc.frequency.setValueAtTime(880, this.audioCtx.currentTime); // A5
+        osc.frequency.setValueAtTime(880, this.audioCtx.currentTime);
         gain.gain.setValueAtTime(0.1, this.audioCtx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + 0.08);
         osc.start();
         osc.stop(this.audioCtx.currentTime + 0.08);
       } else if (type === "success") {
-        osc.frequency.setValueAtTime(523.25, this.audioCtx.currentTime); // C5
-        osc.frequency.exponentialRampToValueAtTime(1046.5, this.audioCtx.currentTime + 0.2); // C6
+        osc.frequency.setValueAtTime(523.25, this.audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1046.5, this.audioCtx.currentTime + 0.2);
         gain.gain.setValueAtTime(0.15, this.audioCtx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + 0.35);
         osc.start();
@@ -251,13 +248,10 @@ const App = {
         osc.stop(this.audioCtx.currentTime + 0.2);
       }
     } catch (e) {
-      // Audio context might be restricted before user gesture
+      // Audio context fallback
     }
   },
 
-  /**
-   * Global Toast Notification System
-   */
   toast(title, message, type = "info", duration = 3000) {
     const container = document.getElementById("toast-container");
     if (!container) return;
@@ -290,7 +284,6 @@ const App = {
   }
 };
 
-// Start application when DOM is ready
 document.addEventListener("DOMContentLoaded", () => {
   App.init();
 });
