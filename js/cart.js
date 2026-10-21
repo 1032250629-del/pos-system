@@ -13,17 +13,24 @@ const Cart = {
   listeners: [],
 
   init() {
-    this.customer = DB.customers.getAll()[0] || { id: "cust-0", name: "Walk-in Customer", points: 0 };
+    const customers = (typeof DB !== "undefined" && DB.customers) ? DB.customers.getAll() : [];
+    this.customer = customers[0] || { id: "cust-0", name: "Walk-in Customer", points: 0 };
     this.notify();
   },
 
   subscribe(callback) {
-    this.listeners.push(callback);
+    if (typeof callback === "function") {
+      this.listeners.push(callback);
+    }
   },
 
   notify(lastUpdatedId = null) {
     const summary = this.getSummary();
-    this.listeners.forEach(cb => cb(this.items, summary, this.customer, lastUpdatedId));
+    this.listeners.forEach(cb => {
+      if (typeof cb === "function") {
+        cb(this.items, summary, this.customer, lastUpdatedId);
+      }
+    });
   },
 
   setCustomer(customer) {
@@ -33,8 +40,10 @@ const Cart = {
 
   addItem(product, qty = 1) {
     if (!product || product.stock <= 0) {
-      App.toast("Out of Stock", `${product?.name || "Item"} is currently out of stock.`, "danger");
-      App.playBeep("error");
+      if (typeof App !== "undefined") {
+        App.toast("Out of Stock", `${product?.name || "Item"} is currently out of stock.`, "danger");
+        App.playBeep("error");
+      }
       return false;
     }
 
@@ -44,20 +53,26 @@ const Cart = {
       const existing = this.items[existingIndex];
       const newQty = existing.qty + qty;
       if (newQty > product.stock) {
-        App.toast("Stock Limit Exceeded", `Only ${product.stock} units available in stock.`, "warning");
-        App.playBeep("error");
+        if (typeof App !== "undefined") {
+          App.toast("Stock Limit Exceeded", `Only ${product.stock} units available in stock.`, "warning");
+          App.playBeep("error");
+        }
         return false;
       }
       existing.qty = newQty;
       existing.total = Number((existing.qty * existing.price).toFixed(2));
-      App.playBeep("scan");
-      App.toast("Cart Updated", `Increased ${product.name} quantity to ${existing.qty}.`, "info", 2000);
+      if (typeof App !== "undefined") {
+        App.playBeep("scan");
+        App.toast("Cart Updated", `Increased ${product.name} quantity to ${existing.qty}.`, "info", 2000);
+      }
       this.notify(product.id);
       return product.id;
     } else {
       if (qty > product.stock) {
-        App.toast("Stock Limit Exceeded", `Only ${product.stock} units available.`, "warning");
-        App.playBeep("error");
+        if (typeof App !== "undefined") {
+          App.toast("Stock Limit Exceeded", `Only ${product.stock} units available.`, "warning");
+          App.playBeep("error");
+        }
         return false;
       }
       this.items.push({
@@ -71,8 +86,10 @@ const Cart = {
         qty: qty,
         total: Number((qty * product.price).toFixed(2))
       });
-      App.playBeep("scan");
-      App.toast("Added to Cart", `${product.name} added to cart.`, "success", 2000);
+      if (typeof App !== "undefined") {
+        App.playBeep("scan");
+        App.toast("Added to Cart", `${product.name} added to cart.`, "success", 2000);
+      }
       this.notify(product.id);
       return product.id;
     }
@@ -87,12 +104,17 @@ const Cart = {
       return;
     }
 
-    const liveProduct = DB.products.getById(productId);
-    const maxStock = liveProduct ? liveProduct.stock : item.stock;
+    let maxStock = item.stock;
+    if (typeof DB !== "undefined" && DB.products && typeof DB.products.getById === "function") {
+      const liveProduct = DB.products.getById(productId);
+      if (liveProduct) maxStock = liveProduct.stock;
+    }
 
     if (qty > maxStock) {
-      App.toast("Stock Limit Hit", `Maximum available stock is ${maxStock} units.`, "warning");
-      App.playBeep("error");
+      if (typeof App !== "undefined") {
+        App.toast("Stock Limit Hit", `Maximum available stock is ${maxStock} units.`, "warning");
+        App.playBeep("error");
+      }
       qty = maxStock;
     }
 
@@ -105,7 +127,9 @@ const Cart = {
     const item = this.items.find(i => i.id === productId);
     const name = item ? item.name : "Item";
     this.items = this.items.filter(i => i.id !== productId);
-    App.toast("Item Removed", `${name} was removed from cart.`, "info", 2000);
+    if (typeof App !== "undefined") {
+      App.toast("Item Removed", `${name} was removed from cart.`, "info", 2000);
+    }
     this.notify();
   },
 
@@ -114,7 +138,8 @@ const Cart = {
     this.discountType = "percent";
     this.discountValue = 0;
     this.appliedPointsDiscount = 0;
-    this.customer = DB.customers.getAll()[0] || { id: "cust-0", name: "Walk-in Customer", points: 0 };
+    const customers = (typeof DB !== "undefined" && DB.customers) ? DB.customers.getAll() : [];
+    this.customer = customers[0] || { id: "cust-0", name: "Walk-in Customer", points: 0 };
     this.notify();
   },
 
@@ -125,7 +150,11 @@ const Cart = {
   },
 
   getSummary() {
-    const settings = DB.settings.get();
+    // Safe settings extraction to prevent undefined crashes
+    const settings = (typeof DB !== "undefined" && DB.settings && typeof DB.settings.get === "function")
+      ? DB.settings.get()
+      : { defaultTaxRate: 5.0, currency: "₹" };
+
     let subtotal = 0;
     let totalTax = 0;
     let totalItemCount = 0;
@@ -168,26 +197,34 @@ const Cart = {
 
   holdCurrentBill(note = "") {
     if (this.items.length === 0) {
-      App.toast("Cart Empty", "Please add items before holding a bill.", "warning");
+      if (typeof App !== "undefined") {
+        App.toast("Cart Empty", "Please add items before holding a bill.", "warning");
+      }
       return null;
     }
 
     const summary = this.getSummary();
-    const held = DB.heldOrders.add({
-      items: JSON.parse(JSON.stringify(this.items)),
-      customer: this.customer,
-      discountType: this.discountType,
-      discountValue: this.discountValue,
-      summary,
-      note: note || `Held bill for ${this.customer.name}`
-    });
+    if (typeof DB !== "undefined" && DB.heldOrders && typeof DB.heldOrders.add === "function") {
+      const held = DB.heldOrders.add({
+        items: JSON.parse(JSON.stringify(this.items)),
+        customer: this.customer,
+        discountType: this.discountType,
+        discountValue: this.discountValue,
+        summary,
+        note: note || `Held bill for ${this.customer.name}`
+      });
 
-    this.clear();
-    App.toast("Bill Held", `Bill #${held.id} parked successfully.`, "info");
-    return held;
+      this.clear();
+      if (typeof App !== "undefined") {
+        App.toast("Bill Held", `Bill #${held.id} parked successfully.`, "info");
+      }
+      return held;
+    }
+    return null;
   },
 
   resumeHeldBill(heldId) {
+    if (typeof DB === "undefined" || !DB.heldOrders || typeof DB.heldOrders.getById !== "function") return false;
     const held = DB.heldOrders.getById(heldId);
     if (!held) return false;
 
@@ -202,9 +239,13 @@ const Cart = {
     this.discountType = held.discountType || "percent";
     this.discountValue = held.discountValue || 0;
 
-    DB.heldOrders.remove(heldId);
+    if (typeof DB.heldOrders.remove === "function") {
+      DB.heldOrders.remove(heldId);
+    }
     this.notify();
-    App.toast("Bill Resumed", `Parked bill restored to cart.`, "success");
+    if (typeof App !== "undefined") {
+      App.toast("Bill Resumed", `Parked bill restored to cart.`, "success");
+    }
     return true;
   }
 };
